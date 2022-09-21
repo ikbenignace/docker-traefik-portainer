@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  wings:
+    image: ghcr.io/pterodactyl/wings:latest
+    restart: always
+    networks:
+      - proxy
+    ports:
+      - "2022:2022"
+    tty: true
+    environment:
+      TZ: "Europe/Brussels"
+      WINGS_UID: 988
+      WINGS_GID: 988
+      WINGS_USERNAME: pterodactyl
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/var/lib/docker/containers/:/var/lib/docker/containers/"
+      - "/tmp/pterodactyl/:/tmp/pterodactyl/"
+      - "/etc/ssl/certs:/etc/ssl/certs:ro"
+      - "${DATA_DIR}/wings/etc/:/etc/pterodactyl/"
+      - "${DATA_DIR}/wings/logs:/var/log/pterodactyl/"
+      - "${SERVERS_DATA_FULL_PATH}:${SERVERS_DATA_FULL_PATH}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.pterodactyl-wings.entrypoints=websecure"
+      - "traefik.http.routers.pterodactyl-wings.rule=Host(`${WINGS_DOMAIN}`)"
+      - "traefik.http.routers.pterodactyl-wings.service=wings"
+      - "traefik.http.services.wings.loadbalancer.server.port=443"
+
+networks:
+  proxy:
+    external: true
+  wings0:
+    name: wings0
+    driver: bridge
+    ipam:
+      config:
+        - subnet: "172.21.0.0/16"
+    driver_opts:
+      com.docker.network.bridge.name: wings0

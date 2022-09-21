@@ -27,7 +27,7 @@ providers:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: rafrasenberg@gmail.com
+      email: ignace.mella@telenet.be
       storage: acme.json
       keyType: EC384
       httpChallenge:

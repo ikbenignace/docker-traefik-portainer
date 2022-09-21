@@ -1,0 +1,49 @@
+version: '3.4'
+
+services:
+  wings:
+    image: ghcr.io/pterodactyl/wings:latest
+    networks:
+      - public
+    ports:
+      - "2022:2022"
+    tty: true
+    environment:
+      TZ: "Europe/Brussels"
+      WINGS_UID: 988
+      WINGS_GID: 988
+      WINGS_USERNAME: pterodactyl
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/var/lib/docker/containers/:/var/lib/docker/containers/"
+      - "/tmp/pterodactyl/:/tmp/pterodactyl/"
+      - "/etc/ssl/certs:/etc/ssl/certs:ro"
+      - "/var/usr/pterodactyl/wings/etc/:/etc/pterodactyl/"
+      - "/var/usr/pterodactyl/wings/logs:/var/log/pterodactyl/"
+      - "/var/lib/pterodactyl:/var/lib/pterodactyl"
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=public
+        - traefik.constraint-label=traefik-public
+        - traefik.http.routers.pterodactyl-wings-http.rule=Host(`node1.mella.dev`)
+        - traefik.http.routers.pterodactyl-wings-http.entrypoints=http
+        - traefik.http.routers.pterodactyl-wings-http.middlewares=https-redirect
+        - traefik.http.routers.pterodactyl-wings-https.rule=Host(`node1.mella.dev`)
+        - traefik.http.routers.pterodactyl-wings-https.entrypoints=https
+        - traefik.http.routers.pterodactyl-wings-https.tls=true
+        - traefik.http.routers.pterodactyl-wings-https.tls.certresolver=le
+        - traefik.http.services.pterodactyl-wings.loadbalancer.server.port=443
+networks:
+  public:
+    external: true
+  wings0:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: "172.21.0.0/16"
+    driver_opts:
+      com.docker.network.bridge.name: wings0

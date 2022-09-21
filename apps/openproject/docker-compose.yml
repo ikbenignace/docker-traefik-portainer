@@ -1,0 +1,24 @@
+version: "2.1"
+services:
+  openproject:
+    image: openproject/community:12
+    container_name: openproject
+    environment:
+      - SERVER_HOSTNAME=op.mella.dev
+      - SECRET_KEY_BASE=secret
+    volumes:
+      - "/var/lib/openproject/pgdata:/var/openproject/pgdata"
+      - "/var/lib/openproject/assets:/var/openproject/assets"
+    networks:
+      - proxy
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.openproject-secure.entrypoints=websecure"
+      - "traefik.http.routers.openproject-secure.rule=Host(`op.mella.dev`)"
+      - "traefik.http.routers.openproject-secure.service=openproject"
+      - "traefik.http.services.openproject.loadbalancer.server.port=80"
+networks:
+  proxy:
+    external: true

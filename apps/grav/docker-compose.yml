@@ -1,0 +1,23 @@
+version: "3.3"
+services:
+  grav:
+    image: lscr.io/linuxserver/grav
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Brussels
+    volumes:
+      - /var/usr/grav/config:/config
+    networks:
+      - proxy
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.grav-secure.entrypoints=websecure"
+      - "traefik.http.routers.grav-secure.rule=Host(`mella.dev`)"
+      - "traefik.http.routers.grav-secure.service=grav"
+      - "traefik.http.services.grav.loadbalancer.server.port=80"
+networks:
+  proxy:
+    external: true

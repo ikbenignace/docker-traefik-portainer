@@ -1,0 +1,122 @@
+version: '3'
+services:
+  gitlab:
+    image: 'gitlab/gitlab-ce:latest'
+    container_name: gitlab
+    restart: unless-stopped
+    hostname: 'git.mella.dev'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'https://gitmella.dev'
+        nginx['listen_port'] = 80
+        nginx['listen_https'] = false
+        nginx['proxy_set_headers'] = {
+          "X-Forwarded-Proto" => "https",
+          "X-Forwarded-Ssl" => "on"
+        }
+
+        gitlab_rails['db_adapter'] = "postgresql"
+        gitlab_rails['db_database'] = "gitlab"
+        gitlab_rails['db_username'] = "postgres"
+        gitlab_rails['db_password'] = "Password123**!"
+        gitlab_rails['db_host'] = "gitlab_database"
+
+        registry['enable'] = false
+        gitlab_rails['registry_enabled'] = true
+        gitlab_rails['registry_host'] = "registry.mella.dev"
+        gitlab_rails['registry_api_url'] = "https://registry.mella.dev"
+        gitlab_rails['registry_issuer'] = "gitlab"
+        gitlab_rails['smtp_enable'] = true
+        gitlab_rails['smtp_address'] = "mailadress.not"
+        gitlab_rails['smtp_port'] = 587
+        gitlab_rails['smtp_user_name'] = "yourmail"
+        gitlab_rails['smtp_password'] = "yourpw"
+        gitlab_rails['smtp_domain'] = "smtp_domain"
+        gitlab_rails['smtp_authentication'] = "login"
+        gitlab_rails['smtp_enable_starttls_auto'] = true
+        gitlab_rails['smtp_tls'] = false
+        gitlab_rails['smtp_ssl'] = true
+        gitlab_rails['smtp_force_ssl'] = true
+        gitlab_rails['gitlab_email_from'] = 'gitlab@mella.dev'
+
+
+        gitlab_rails['gitlab_shell_ssh_port'] = {{ gitlab_port_ssh }}
+    ports:
+      - "{{ gitlab_port_ssh }}:{{ gitlab_port_ssh }}"
+    networks:
+      - proxy
+    volumes:
+      - "{{ gitlab_data_directory }}/config:/etc/gitlab"
+      - "{{ gitlab_data_directory }}/log:/var/log/gitlab"
+      - "{{ gitlab_data_directory }}/data:/var/opt/gitlab"
+      #- "{{ docker_home }}/letsencrypt/certs/gitlab.yourdomain:/certs"
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gitlab.entrypoints=web"
+      - "traefik.http.routers.gitlab.rule=Host(`git.mella.dev`)"
+      - "traefik.http.middlewares.gitlab-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.gitlab.middlewares=gitlab-https-redirect"
+      - "traefik.http.routers.gitlab-secure.entrypoints=websecure"
+      - "traefik.http.routers.gitlab-secure.rule=Host(`git.mella.dev`)"
+      - "traefik.http.routers.gitlab-secure.tls=true"
+      - "traefik.http.routers.gitlab-secure.tls.certresolver=myresolver"
+      - "traefik.http.routers.gitlab-secure.service=gitlab"
+      - "traefik.http.services.gitlab.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.gitlab-secure.middlewares=allservices-ipwhitelist"
+      - "traefik.http.routers.gitlab.middlewares=allservices-ipwhitelist"
+      - "traefik.tcp.routers.gitlab-ssh.entrypoints=ssh-gitlab"
+      - "traefik.tcp.routers.gitlab-ssh.rule=HostSNI(`*`)"
+      - "traefik.tcp.routers.gitlab-ssh.service=gitlab-ssh-svc"
+      - "traefik.tcp.services.gitlab-ssh-svc.loadbalancer.server.port={{ gitlab_port_ssh }}"
+      #- "traefik.tcp.routers.gitlab-ssh.middlewares=allservices-ipwhitelist"
+
+  registry:
+    restart: unless-stopped
+    image: registry:2.7
+    container_name: gitlab_registry
+    volumes:
+      - "{{ gitlab_data_directory }}/registry/data:/registry"
+      - "{{ docker_home }}/letsencrypt/certs/gitlab.yourdomain:/certs"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.registry.entrypoints=web"
+      - "traefik.http.routers.registry.rule=Host(`registry.gitlab.yourdomain`)"
+      - "traefik.http.middlewares.registry-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.registry.middlewares=registry-https-redirect"
+      - "traefik.http.routers.registry-secure.entrypoints=websecure"
+      - "traefik.http.routers.registry-secure.rule=Host(`registry.gitlab.yourdomain`)"
+      - "traefik.http.routers.registry-secure.tls=true"
+      - "traefik.http.routers.registry-secure.tls.certresolver=myresolver"
+      - "traefik.http.routers.registry-secure.service=registry"
+      - "traefik.http.services.registry.loadbalancer.server.port=5000"
+      - "traefik.docker.network=traefikproxy"
+      - "traefik.http.routers.registry-secure.middlewares=allservices-ipwhitelist"
+      - "traefik.http.routers.registry.middlewares=allservices-ipwhitelist"
+    networks:
+      - proxy
+    environment:
+      REGISTRY_LOG_LEVEL: debug
+      REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /registry
+      REGISTRY_AUTH_TOKEN_REALM: https://git.mella.dev/jwt/auth
+      REGISTRY_AUTH_TOKEN_SERVICE: container_registry
+      REGISTRY_AUTH_TOKEN_ISSUER: gitlab
+      REGISTRY_AUTH_TOKEN_ROOTCERTBUNDLE: /certs/certificate.crt
+      # REGISTRY_HTTP_SECRET:
+      REGISTRY_STORAGE_DELETE_ENABLED: 'true'
+  database:
+    image: postgres:11-alpine
+    container_name: gitlab_database
+    restart: unless-stopped
+    networks:
+      - traefikproxy
+    environment:
+      POSTGRES_PASSWORD: "Password123**!"
+      POSTGRES_DB: gitlab
+    volumes:
+      - "{{ gitlab_data_directory }}/data/database:/var/lib/postgresql/data"
+
+networks:
+  proxy:
+    external: true
